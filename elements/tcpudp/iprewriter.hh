@@ -2,6 +2,7 @@
 #define CLICK_IPREWRITER_HH
 #include "tcprewriter.hh"
 #include "udprewriter.hh"
+#include <click/lockedmap.hh>
 CLICK_DECLS
 class UDPRewriter;
 
@@ -230,13 +231,25 @@ class IPRewriter : public TCPRewriter { public:
 
     IPRewriterEntry *get_entry(int ip_p, const IPFlowID &flowid, int input);
     HashContainer<IPRewriterEntry> *get_map(int mapid) {
-	if (mapid == IPRewriterInput::mapid_default)
-	    return &_map;
-	else if (mapid == IPRewriterInput::mapid_iprewriter_udp)
-	    return &_udp_map;
-	else
-	    return 0;
+    HashContainer<IPRewriterEntry> *map = NULL;
+
+	if (mapid == IPRewriterInput::mapid_default) {
+	    _locked_map.acquire();
+		map = &(*_locked_map._map);
+		_locked_map.release();
+		goto out;
+	}
+
+	if (mapid == IPRewriterInput::mapid_iprewriter_udp) {
+		_udp_map.acquire();
+		map = &(*_udp_map._map);
+		_udp_map.release();
+	}
+
+out:
+	return map;
     }
+
     IPRewriterEntry *add_flow(int ip_p, const IPFlowID &flowid,
 			      const IPFlowID &rewritten_flowid, int input);
     void destroy_flow(IPRewriterFlow *flow);
@@ -253,7 +266,7 @@ class IPRewriter : public TCPRewriter { public:
 
   private:
 
-    Map _udp_map;
+    LockedMap _udp_map;
     SizedHashAllocator<sizeof(UDPFlow)> _udp_allocator;
     uint32_t _udp_timeouts[2];
     uint32_t _udp_streaming_timeout;
@@ -267,7 +280,7 @@ class IPRewriter : public TCPRewriter { public:
 
     static inline Map &reply_udp_map(IPRewriterInput *rwinput) {
 	IPRewriter *x = static_cast<IPRewriter *>(rwinput->reply_element);
-	return x->_udp_map;
+	return *(x->_udp_map._map);
     }
     static String udp_mappings_handler(Element *e, void *user_data);
 
@@ -280,7 +293,10 @@ IPRewriter::destroy_flow(IPRewriterFlow *flow)
     if (flow->ip_p() == IP_PROTO_TCP)
 	TCPRewriter::destroy_flow(flow);
     else {
-	unmap_flow(flow, _udp_map, &reply_udp_map(flow->owner()));
+    _udp_map.acquire();
+	unmap_flow(flow, *(_udp_map._map), &reply_udp_map(flow->owner()));
+	_udp_map.release();
+
 	flow->~IPRewriterFlow();
 	_udp_allocator.deallocate(flow);
     }

@@ -124,7 +124,12 @@ UDPRewriter::add_flow(int ip_p, const IPFlowID &flowid,
 	(&_input_specs[input], flowid, rewritten_flowid, ip_p,
 	 !!_timeouts[1], click_jiffies() + relevant_timeout(_timeouts));
 
-    return store_flow(flow, input, _map);
+    IPRewriterEntry *entry;
+    _locked_map.acquire();
+    entry = store_flow(flow, input, (*(_locked_map._map)));
+    _locked_map.release();
+
+    return entry;
 }
 
 void
@@ -149,7 +154,10 @@ UDPRewriter::push(int port, Packet *p_in)
     }
 
     IPFlowID flowid(p);
-    IPRewriterEntry *m = _map.get(flowid);
+
+    _locked_map.acquire();
+    IPRewriterEntry *m = (*(_locked_map._map)).get(flowid);
+    _locked_map.release();
 
     if (!m) {			// create new mapping
 	IPRewriterInput &is = _input_specs.unchecked_at(port);
@@ -168,10 +176,13 @@ UDPRewriter::push(int port, Packet *p_in)
     mf->apply(p, m->direction(), _annos);
 
     click_jiffies_t now_j = click_jiffies();
+
+    _heap_lock.acquire();
     if (_timeouts[1])
 	mf->change_expiry(_heap, true, now_j + _timeouts[1]);
     else
 	mf->change_expiry(_heap, false, now_j + udp_flow_timeout(mf));
+    _heap_lock.release();
 
     output(m->output()).push(p);
 }
@@ -183,10 +194,13 @@ UDPRewriter::dump_mappings_handler(Element *e, void *)
     UDPRewriter *rw = (UDPRewriter *)e;
     click_jiffies_t now = click_jiffies();
     StringAccum sa;
-    for (Map::iterator iter = rw->_map.begin(); iter.live(); ++iter) {
+
+    rw->_locked_map.acquire();
+    for (Map::iterator iter = (*(rw->_locked_map._map)).begin(); iter.live(); ++iter) {
 	iter->flow()->unparse(sa, iter->direction(), now);
 	sa << '\n';
     }
+    rw->_locked_map.release();
     return sa.take_string();
 }
 

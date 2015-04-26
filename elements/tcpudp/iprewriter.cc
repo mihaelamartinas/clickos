@@ -29,8 +29,8 @@
 CLICK_DECLS
 
 IPRewriter::IPRewriter()
-    : _udp_map(0)
 {
+	(*_udp_map._map)(0);
 }
 
 IPRewriter::~IPRewriter()
@@ -80,7 +80,11 @@ IPRewriter::get_entry(int ip_p, const IPFlowID &flowid, int input)
 	return TCPRewriter::get_entry(ip_p, flowid, input);
     if (ip_p != IP_PROTO_UDP)
 	return 0;
-    IPRewriterEntry *m = _udp_map.get(flowid);
+
+    _udp_map.acquire();
+    IPRewriterEntry *m = (*_udp_map._map).get(flowid);
+    _udp_map.release();
+
     if (!m && (unsigned) input < (unsigned) _input_specs.size()) {
 	IPRewriterInput &is = _input_specs[input];
 	IPFlowID rewritten_flowid = IPFlowID::uninitialized_t();
@@ -101,12 +105,17 @@ IPRewriter::add_flow(int ip_p, const IPFlowID &flowid,
     if (!(data = _udp_allocator.allocate()))
 	return 0;
 
+    IPRewriterEntry entry;
     IPRewriterInput *rwinput = &_input_specs[input];
     IPRewriterFlow *flow = new(data) IPRewriterFlow
 	(rwinput, flowid, rewritten_flowid, ip_p,
 	 !!_udp_timeouts[1], click_jiffies() + relevant_timeout(_udp_timeouts));
 
-    return store_flow(flow, input, _udp_map, &reply_udp_map(rwinput));
+    _udp_map.acquire();
+    entry = store_flow(flow, input, *(_udp_map._map), &reply_udp_map(rwinput));
+    _udp_map.release();
+
+    return entry;
 }
 
 void
@@ -128,8 +137,10 @@ IPRewriter::push(int port, Packet *p_in)
     }
 
     IPFlowID flowid(p);
-    HashContainer<IPRewriterEntry> *map = (iph->ip_p == IP_PROTO_TCP ? &_map : &_udp_map);
-    IPRewriterEntry *m = map->get(flowid);
+    LockedMap *map = (iph->ip_p == IP_PROTO_TCP ? &_map : &_udp_map);
+    map->acquire();
+    IPRewriterEntry *m = *((*map)._map)->get(flowid);
+    map->release();
 
     if (!m) {			// create new mapping
 	IPRewriterInput &is = _input_specs.unchecked_at(port);
@@ -171,10 +182,14 @@ IPRewriter::udp_mappings_handler(Element *e, void *)
     IPRewriter *rw = (IPRewriter *)e;
     click_jiffies_t now = click_jiffies();
     StringAccum sa;
-    for (Map::iterator iter = rw->_udp_map.begin(); iter.live(); ++iter) {
+
+    rw->_udp_map.acquire();
+    for (Map::iterator iter = (*(rw->_udp_map._map)).begin(); iter.live(); ++iter) {
 	iter->flow()->unparse(sa, iter->direction(), now);
 	sa << '\n';
     }
+    rw->_udp_map.release();
+
     return sa.take_string();
 }
 

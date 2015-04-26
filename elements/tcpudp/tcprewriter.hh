@@ -3,6 +3,7 @@
 #include "elements/ip/iprewriterbase.hh"
 #include "elements/ip/iprwmapping.hh"
 #include <clicknet/tcp.h>
+#include <click/sync.hh>
 CLICK_DECLS
 
 /*
@@ -197,7 +198,10 @@ class TCPRewriter : public IPRewriterBase { public:
 inline void
 TCPRewriter::destroy_flow(IPRewriterFlow *flow)
 {
-    unmap_flow(flow, _map);
+    _locked_map.acquire();
+    unmap_flow(flow, *(_locked_map._map));
+    _locked_map.release();
+
     static_cast<TCPFlow *>(flow)->~TCPFlow();
     _allocator.deallocate(flow);
 }
