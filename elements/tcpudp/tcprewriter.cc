@@ -294,9 +294,9 @@ TCPRewriter::add_flow(int /*ip_p*/, const IPFlowID &flowid,
 	(&_input_specs[input], flowid, rewritten_flowid,
 	 !!_timeouts[1], click_jiffies() + relevant_timeout(_timeouts));
 
-    _locked_map.acquire();
-    entry = store_flow(flow, input, *_locked_map._map);
-    _locked_map.release();
+    _map_lock->acquire();
+    entry = store_flow(flow, input, _map);
+    _map_lock->release();
 
     return entry;
 }
@@ -320,9 +320,9 @@ TCPRewriter::push(int port, Packet *p_in)
     }
 
     IPFlowID flowid(p);
-    _locked_map.acquire();
-    IPRewriterEntry *m = (*_locked_map._map).get(flowid);
-    _locked_map.release();
+    _map_lock->acquire();
+    IPRewriterEntry *m = _map.get(flowid);
+    _map_lock->release();
 
     if (!m) {			// create new mapping
 	IPRewriterInput &is = _input_specs.unchecked_at(port);
@@ -342,12 +342,12 @@ TCPRewriter::push(int port, Packet *p_in)
 
     click_jiffies_t now_j = click_jiffies();
 
-    _heap_lock.acquire();
+    _heap_lock->acquire();
     if (_timeouts[1])
 	mf->change_expiry(_heap, true, now_j + _timeouts[1]);
     else
 	mf->change_expiry(_heap, false, now_j + tcp_flow_timeout(mf));
-    _heap_lock.release();
+    _heap_lock->release();
 
     output(m->output()).push(p);
 }
@@ -360,13 +360,13 @@ TCPRewriter::tcp_mappings_handler(Element *e, void *)
     click_jiffies_t now = click_jiffies();
     StringAccum sa;
 
-    rw->_locked_map.acquire();
-    for (Map::iterator iter = (*rw->_locked_map._map).begin(); iter.live(); ++iter) {
+    rw->_map_lock->acquire();
+    for (Map::iterator iter = (rw->_map).begin(); iter.live(); ++iter) {
 	TCPFlow *f = static_cast<TCPFlow *>(iter->flow());
 	f->unparse(sa, iter->direction(), now);
 	sa << '\n';
     }
-    rw->_locked_map.release();
+    rw->_map_lock->release();
 
     return sa.take_string();
 }
@@ -386,9 +386,9 @@ TCPRewriter::tcp_lookup_handler(int, String &str, Element *e, const Handler *, E
 	.complete() < 0)
 	return -1;
 
-    rw->_locked_map.acquire();
-    HashContainer<IPRewriterEntry> *map = rw->get_locked_map(IPRewriterInput::mapid_default);
-    rw->_locked_map.release();
+    rw->_map_lock->acquire();
+    HashContainer<IPRewriterEntry> *map = rw->get_map(IPRewriterInput::mapid_default);
+    rw->_map_lock->release();
 
     if (!map)
 	return errh->error("no map!");
@@ -396,7 +396,7 @@ TCPRewriter::tcp_lookup_handler(int, String &str, Element *e, const Handler *, E
     StringAccum sa;
     IPFlowID flow(saddr, htons(sport), daddr, htons(dport));
 
-    rw->_locked_map.acquire();
+    rw->_map_lock->acquire();
     if (Map::iterator iter = map->find(flow)) {
 	TCPFlow *f = static_cast<TCPFlow *>(iter->flow());
 	const IPFlowID &flowid = f->entry(iter->direction()).rewritten_flowid();
@@ -404,7 +404,7 @@ TCPRewriter::tcp_lookup_handler(int, String &str, Element *e, const Handler *, E
 	sa << flowid.saddr() << " " << ntohs(flowid.sport()) << " "
 	   << flowid.daddr() << " " << ntohs(flowid.dport());
     }
-    rw->_locked_map.release();
+    rw->_map_lock->release();
 
     str = sa.take_string();
     return 0;

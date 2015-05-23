@@ -29,13 +29,37 @@
 CLICK_DECLS
 
 IPRewriter::IPRewriter()
+	:_udp_map(0), _udp_map_lock(new SimpleSpinlock)
 {
-	(*_udp_map._map)(0);
+#ifdef CLICK_USERLEVEL
+	migration_thread_id = 0;
+	thread_started = false;
+#endif
 }
 
 IPRewriter::~IPRewriter()
 {
+#ifdef CLICK_USERLEVEL
+	int ret;
+	if (thread_started) {
+		ret = pthread_join(migration_thread_id, NULL);
+		if (ret != 0) {
+			click_chatter("Error stopping migration thread!\n");
+		} else
+			thread_started = false;
+	}
+#endif
 }
+
+#ifdef CLICK_USERLEVEL
+void *
+IPRewriter::migration_run(void *migration_data)
+{
+	migration_data = NULL;
+	click_chatter("Migration function thread has been called\n");
+	return NULL;
+}
+#endif
 
 void *
 IPRewriter::cast(const char *n)
@@ -53,6 +77,7 @@ IPRewriter::cast(const char *n)
 int
 IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+	int ret;
     bool has_udp_streaming_timeout = false;
     _udp_timeouts[0] = 60 * 5;	// 5 minutes
     _udp_timeouts[1] = 5;	// 5 seconds
@@ -70,7 +95,17 @@ IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
     _udp_timeouts[1] *= CLICK_HZ;
     _udp_streaming_timeout *= CLICK_HZ; // IPRewriterBase handles the others
 
-    return TCPRewriter::configure(conf, errh);
+    ret = TCPRewriter::configure(conf, errh);
+	if (ret != 0)
+		return ret;
+#ifdef CLICK_USERLEVEL
+	/* if the TCPRewriter has been configured, it is safe to start the
+	 * migration thread */
+	if (pthread_create(&migration_thread_id, NULL, migration_run, NULL))
+		return errh->error("Failed to create migration thread\n");
+	thread_started = true;
+#endif
+	return ret;
 }
 
 inline IPRewriterEntry *
@@ -81,9 +116,9 @@ IPRewriter::get_entry(int ip_p, const IPFlowID &flowid, int input)
     if (ip_p != IP_PROTO_UDP)
 	return 0;
 
-    _udp_map.acquire();
-    IPRewriterEntry *m = (*_udp_map._map).get(flowid);
-    _udp_map.release();
+    _udp_map_lock->acquire();
+    IPRewriterEntry *m = _udp_map.get(flowid);
+    _udp_map_lock->release();
 
     if (!m && (unsigned) input < (unsigned) _input_specs.size()) {
 	IPRewriterInput &is = _input_specs[input];
@@ -105,15 +140,15 @@ IPRewriter::add_flow(int ip_p, const IPFlowID &flowid,
     if (!(data = _udp_allocator.allocate()))
 	return 0;
 
-    IPRewriterEntry entry;
+    IPRewriterEntry *entry;
     IPRewriterInput *rwinput = &_input_specs[input];
     IPRewriterFlow *flow = new(data) IPRewriterFlow
 	(rwinput, flowid, rewritten_flowid, ip_p,
 	 !!_udp_timeouts[1], click_jiffies() + relevant_timeout(_udp_timeouts));
 
-    _udp_map.acquire();
-    entry = store_flow(flow, input, *(_udp_map._map), &reply_udp_map(rwinput));
-    _udp_map.release();
+    _udp_map_lock->acquire();
+    entry = store_flow(flow, input, _udp_map, &reply_udp_map(rwinput));
+    _udp_map_lock->release();
 
     return entry;
 }
@@ -123,6 +158,8 @@ IPRewriter::push(int port, Packet *p_in)
 {
     WritablePacket *p = p_in->uniqueify();
     click_ip *iph = p->ip_header();
+	Map *map;
+	SimpleSpinlock *lock;
 
     // handle non-first fragments
     if ((iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP)
@@ -137,10 +174,20 @@ IPRewriter::push(int port, Packet *p_in)
     }
 
     IPFlowID flowid(p);
-    LockedMap *map = (iph->ip_p == IP_PROTO_TCP ? &_map : &_udp_map);
-    map->acquire();
-    IPRewriterEntry *m = *((*map)._map)->get(flowid);
-    map->release();
+	if (iph->ip_p == IP_PROTO_TCP) {
+		lock = _map_lock;
+		lock->acquire();
+		map = &_map;
+		lock->release();
+	} else {
+		lock = _udp_map_lock;
+		lock->acquire();
+		map = &_udp_map;
+		lock->release();
+	}
+    lock->acquire();
+    IPRewriterEntry *m = map->get(flowid);
+    lock->release();
 
     if (!m) {			// create new mapping
 	IPRewriterInput &is = _input_specs.unchecked_at(port);
@@ -183,12 +230,12 @@ IPRewriter::udp_mappings_handler(Element *e, void *)
     click_jiffies_t now = click_jiffies();
     StringAccum sa;
 
-    rw->_udp_map.acquire();
-    for (Map::iterator iter = (*(rw->_udp_map._map)).begin(); iter.live(); ++iter) {
+    rw->_udp_map_lock->acquire();
+    for (Map::iterator iter = rw->_udp_map.begin(); iter.live(); ++iter) {
 	iter->flow()->unparse(sa, iter->direction(), now);
 	sa << '\n';
     }
-    rw->_udp_map.release();
+    rw->_udp_map_lock->release();
 
     return sa.take_string();
 }

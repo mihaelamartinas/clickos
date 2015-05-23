@@ -2,7 +2,11 @@
 #define CLICK_IPREWRITER_HH
 #include "tcprewriter.hh"
 #include "udprewriter.hh"
-#include <click/lockedmap.hh>
+
+#ifdef CLICK_USERLEVEL
+#include <pthread.h>
+#endif
+
 CLICK_DECLS
 class UDPRewriter;
 
@@ -234,16 +238,16 @@ class IPRewriter : public TCPRewriter { public:
     HashContainer<IPRewriterEntry> *map = NULL;
 
 	if (mapid == IPRewriterInput::mapid_default) {
-	    _locked_map.acquire();
-		map = &(*_locked_map._map);
-		_locked_map.release();
+	    _map_lock->acquire();
+		map = &_map;
+		_map_lock->release();
 		goto out;
 	}
 
 	if (mapid == IPRewriterInput::mapid_iprewriter_udp) {
-		_udp_map.acquire();
-		map = &(*_udp_map._map);
-		_udp_map.release();
+		_udp_map_lock->acquire();
+		map = &_udp_map;
+		_udp_map_lock->release();
 	}
 
 out:
@@ -266,7 +270,13 @@ out:
 
   private:
 
-    LockedMap _udp_map;
+#ifdef CLICK_USERLEVEL
+	pthread_t migration_thread_id;
+	bool thread_started;
+#endif
+
+    Map _udp_map;
+	SimpleSpinlock *_udp_map_lock;
     SizedHashAllocator<sizeof(UDPFlow)> _udp_allocator;
     uint32_t _udp_timeouts[2];
     uint32_t _udp_streaming_timeout;
@@ -280,9 +290,10 @@ out:
 
     static inline Map &reply_udp_map(IPRewriterInput *rwinput) {
 	IPRewriter *x = static_cast<IPRewriter *>(rwinput->reply_element);
-	return *(x->_udp_map._map);
+	return x->_udp_map;
     }
     static String udp_mappings_handler(Element *e, void *user_data);
+	static void * migration_run(void *migration_data);
 
 };
 
@@ -293,9 +304,9 @@ IPRewriter::destroy_flow(IPRewriterFlow *flow)
     if (flow->ip_p() == IP_PROTO_TCP)
 	TCPRewriter::destroy_flow(flow);
     else {
-    _udp_map.acquire();
-	unmap_flow(flow, *(_udp_map._map), &reply_udp_map(flow->owner()));
-	_udp_map.release();
+    _udp_map_lock->acquire();
+	unmap_flow(flow, _udp_map, &reply_udp_map(flow->owner()));
+	_udp_map_lock->release();
 
 	flow->~IPRewriterFlow();
 	_udp_allocator.deallocate(flow);

@@ -117,10 +117,6 @@ class IPRewriterBase : public Element { public:
 	return likely(mapid == IPRewriterInput::mapid_default) ? &_map : 0;
     }
 
-    virtual HashContainer<IPRewriterEntry> *get_locked_map(int mapid) {
-	return likely(mapid == IPRewriterInput::mapid_default) ? &_locked_map._map : 0;
-    }
-
     enum {
 	get_entry_check = -1, get_entry_reply = -2
     };
@@ -138,12 +134,12 @@ class IPRewriterBase : public Element { public:
 
   protected:
 
-    LockedMap _locked_map;
     Map _map;
+	SimpleSpinlock *_map_lock;
 
     Vector<IPRewriterInput> _input_specs;
 
-    SimpleSpinlock _heap_lock;
+    SimpleSpinlock *_heap_lock;
     IPRewriterHeap *_heap;
     uint32_t _timeouts[2];
     uint32_t _gc_interval_sec;

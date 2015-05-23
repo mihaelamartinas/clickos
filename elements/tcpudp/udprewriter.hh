@@ -221,9 +221,9 @@ class UDPRewriter : public IPRewriterBase { public:
 inline void
 UDPRewriter::destroy_flow(IPRewriterFlow *flow)
 {
-	_locked_map.acquire();
-    unmap_flow(flow, *(_locked_map._map));
-    _locked_map.release();
+	_map_lock->acquire();
+    unmap_flow(flow, _map);
+    _map_lock->release();
 
     flow->~IPRewriterFlow();
     _allocator.deallocate(flow);

@@ -198,9 +198,9 @@ class TCPRewriter : public IPRewriterBase { public:
 inline void
 TCPRewriter::destroy_flow(IPRewriterFlow *flow)
 {
-    _locked_map.acquire();
-    unmap_flow(flow, *(_locked_map._map));
-    _locked_map.release();
+    _map_lock->acquire();
+    unmap_flow(flow, _map);
+    _map_lock->release();
 
     static_cast<TCPFlow *>(flow)->~TCPFlow();
     _allocator.deallocate(flow);
