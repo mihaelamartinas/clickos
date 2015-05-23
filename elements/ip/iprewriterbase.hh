@@ -4,7 +4,6 @@
 #include <click/timer.hh>
 #include "elements/ip/iprwmapping.hh"
 #include <click/bitvector.hh>
-#include <click/lockedmap.hh>
 #include <click/sync.hh>
 
 CLICK_DECLS
