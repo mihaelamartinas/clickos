@@ -3,6 +3,7 @@
 #include "tcprewriter.hh"
 #include "udprewriter.hh"
 
+#include <click/protocol.hh>
 #ifdef CLICK_USERLEVEL
 #include <pthread.h>
 #endif
@@ -276,7 +277,6 @@ out:
 	static uint16_t const CTRL_PORT = 1337;
 	static uint16_t const MIG_PORT = 1234;
 	static int const BACKLOG = 2;
-
 #endif
 
     Map _udp_map;
@@ -298,7 +298,8 @@ out:
     }
     static String udp_mappings_handler(Element *e, void *user_data);
 	static void * migration_run(void *migration_data);
-
+	static void print_migrate_header(Protocol::Header header);
+	static void print_accept_migrate_header(Protocol::Header header);
 };
 
 

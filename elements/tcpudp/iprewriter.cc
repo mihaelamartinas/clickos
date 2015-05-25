@@ -27,7 +27,6 @@
 #include <click/timer.hh>
 #include <click/router.hh>
 #include <click/tcpsocket.hh>
-#include <click/protocol.hh>
 
 CLICK_DECLS
 
@@ -55,6 +54,18 @@ IPRewriter::~IPRewriter()
 }
 
 #ifdef CLICK_USERLEVEL
+
+void IPRewriter :: print_migrate_header(Protocol::Header header)
+{
+	click_chatter("ip = %ui, index = %ui, destinationLength = %ui, destPort = %ui\n", header.migrate.ip, header.migrate.index,
+			header.migrate.destinationLength, header.migrate.destinationPort);
+}
+
+void IPRewriter :: print_accept_migrate_header(Protocol::Header header)
+{
+	click_chatter("ip = %ui, subnetCount = %ui, destinationLength = %ui, destPort = %ui\n", header.acceptMigration.ip, header.acceptMigration.subnetCount);
+}
+
 void *
 IPRewriter::migration_run(void *migration_data)
 {
@@ -63,6 +74,7 @@ IPRewriter::migration_run(void *migration_data)
 	Protocol::Header header;
 	bool exit = false;
 	ssize_t size;
+	char *destination;
 
 	click_chatter("Migration function thread has been called\n");
 
@@ -83,20 +95,29 @@ IPRewriter::migration_run(void *migration_data)
 
 	while (!exit) {
 		/* read header type */
-		size = acceptedSocket.recvNarrowed(&header.type, sizeof(int));
+		size = acceptedSocket.recvNarrowed(&header.type, sizeof(Protocol::Header));
 		if (size < 0) {
 			exit = true;
 			click_chatter("Read invalid value\n");
 			continue;
 		}
-
-		click_chatter("Header type is ");
 		switch (header.type) {
 			case Protocol::Header::T_MIGRATE:
-				click_chatter("T_MIGRATE\n");;
+				click_chatter("T_MIGRATE\n");
+				print_migrate_header(header);
+
+				/* receive destination hostname */
+				destination = new char[header.migrate.destinationLength];
+				size = acceptedSocket.recvNarrowed(destination, header.migrate.destinationLength + 1);
+				if (size < 0) {
+					exit = true;
+				}
+
+				click_chatter("Destination address is %s\n", destination);
 				break;
 			case Protocol::Header::T_ACCEPT_MIGRATION:
 				click_chatter("T_ACCEPT_MIGRATION\n");
+				print_accept_migrate_header(header);
 				break;
 			case Protocol::Header::T_ACK:
 				click_chatter("T_ACK\n");

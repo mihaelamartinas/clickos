@@ -1,10 +1,7 @@
 #ifndef CLICKOS_MIGRATION_PROTOCOL
 #define CLICKOS_MIGRATION_PROTOCOL
 
-#ifdef CLICK_USERSPACE
-#include <stddef.h>
-#include <string.h>
-#endif
+#include <click/config.h>
 
 CLICK_DECLS
 namespace Protocol {
@@ -42,11 +39,6 @@ namespace Protocol {
 	{
 		enum Type
 		{
-			T_INSTANTIATE,
-			T_DESTROY,
-
-			T_SET_PREFIX_LENGTH,
-
 			T_MIGRATE,
 			T_ACCEPT_MIGRATION,
 

@@ -109,7 +109,7 @@ ssize_t TCPSocket :: recvNarrowed(void *buf, size_t len)
 	ssize_t ret;
 
 	while (read_size < len) {
-		ret = recv(buf + read_size, len - read_size);
+		ret = recv((char *)buf + read_size, len - read_size);
 		if (ret < 0)
 			return -1;
 
@@ -125,7 +125,7 @@ ssize_t TCPSocket :: sendNarrowed(void *buf, size_t len)
 	ssize_t ret;
 
 	while (written_size < len) {
-		ret = send(buf + written_size, len - written_size);
+		ret = send((char *)buf + written_size, len - written_size);
 		if (ret < 0)
 			return -1;
 
