@@ -39,11 +39,19 @@ namespace Protocol {
 	{
 		enum Type
 		{
-			T_MIGRATE,
-			T_ACCEPT_MIGRATION,
+		T_INSTANTIATE,
+		T_DESTROY,
 
-			T_ACK,
-			T_NACK,
+		T_SET_PREFIX_LENGTH,
+
+		T_MIGRATE,
+		T_ACCEPT_MIGRATION,
+
+		T_PRECOPY,
+		T_ACCEPT_PRECOPY,
+
+		T_ACK,
+		T_NACK,
 		};
 
 		Type type;

@@ -95,7 +95,7 @@ IPRewriter::migration_run(void *migration_data)
 
 	while (!exit) {
 		/* read header type */
-		size = acceptedSocket.recvNarrowed(&header.type, sizeof(Protocol::Header));
+		size = acceptedSocket.recvNarrowed(&header, sizeof(Protocol::Header));
 		if (size < 0) {
 			exit = true;
 			click_chatter("Read invalid value\n");
