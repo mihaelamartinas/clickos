@@ -103,6 +103,38 @@ ssize_t TCPSocket :: recv(void *buf, size_t len)
 	return count;
 }
 
+ssize_t TCPSocket :: recvNarrowed(void *buf, size_t len)
+{
+	size_t read_size = 0;
+	ssize_t ret;
+
+	while (read_size < len) {
+		ret = recv(buf + read_size, len - read_size);
+		if (ret < 0)
+			return -1;
+
+		read_size += ret;
+	}
+
+	return read_size;
+}
+
+ssize_t TCPSocket :: sendNarrowed(void *buf, size_t len)
+{
+	size_t written_size = 0;
+	ssize_t ret;
+
+	while (written_size < len) {
+		ret = send(buf + written_size, len - written_size);
+		if (ret < 0)
+			return -1;
+
+		written_size += ret;
+	}
+
+	return written_size;
+}
+
 ssize_t TCPSocket :: getTx()
 {
 	return tx;

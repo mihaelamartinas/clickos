@@ -18,8 +18,12 @@ public:
 	int connect(uint16_t port, char *server_ip);
 	int listen(int backlog);
 	TCPSocket accept();
+
 	ssize_t send(void *buf, size_t len);
 	ssize_t recv(void *buf, size_t len);
+	ssize_t sendNarrowed(void *buf, size_t len);
+	ssize_t recvNarrowed(void *buf, size_t len);
+
 	ssize_t getTx();
 	ssize_t getRx();
 #endif

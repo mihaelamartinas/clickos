@@ -27,6 +27,7 @@
 #include <click/timer.hh>
 #include <click/router.hh>
 #include <click/tcpsocket.hh>
+#include <click/protocol.hh>
 
 CLICK_DECLS
 
@@ -59,7 +60,9 @@ IPRewriter::migration_run(void *migration_data)
 {
 	TCPSocket controlSocket(CTRL_PORT);
 	TCPSocket acceptedSocket;
-	int ret;
+	Protocol::Header header;
+	bool exit = false;
+	ssize_t size;
 
 	click_chatter("Migration function thread has been called\n");
 
@@ -76,6 +79,38 @@ IPRewriter::migration_run(void *migration_data)
 		return NULL;
 
 	/* wait to receive packets */
+	click_chatter("Receive packet from controller\n");
+
+	while (!exit) {
+		/* read header type */
+		size = controlSocket.recvNarrowed(&header.type, sizeof(int));
+		if (size < 0) {
+			exit = true;
+			click_chatter("Read invalid value\n");
+			continue;
+		}
+
+		click_chatter("Header type is ");
+		switch (header.type) {
+			case Protocol::Header::T_MIGRATE:
+				click_chatter("T_MIGRATE\n");;
+				break;
+			case Protocol::Header::T_ACCEPT_MIGRATION:
+				click_chatter("T_ACCEPT_MIGRATION\n");
+				break;
+			case Protocol::Header::T_ACK:
+				click_chatter("T_ACK\n");
+				break;
+			case Protocol::Header::T_NACK:
+				click_chatter("T_NACK\n");
+				break;
+			default: {
+				click_chatter("Error: unknown header\n");
+				exit = true;
+			}
+		}
+	}
+
 	return NULL;
 }
 #endif
