@@ -273,6 +273,10 @@ out:
 #ifdef CLICK_USERLEVEL
 	pthread_t migration_thread_id;
 	bool thread_started;
+	static uint16_t const CTRL_PORT = 1337;
+	static uint16_t const MIG_PORT = 1234;
+	static int const BACKLOG = 2;
+
 #endif
 
     Map _udp_map;

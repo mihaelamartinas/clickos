@@ -26,6 +26,8 @@
 #include <click/error.hh>
 #include <click/timer.hh>
 #include <click/router.hh>
+#include <click/tcpsocket.hh>
+
 CLICK_DECLS
 
 IPRewriter::IPRewriter()
@@ -55,8 +57,25 @@ IPRewriter::~IPRewriter()
 void *
 IPRewriter::migration_run(void *migration_data)
 {
-	migration_data = NULL;
+	TCPSocket controlSocket(CTRL_PORT);
+	TCPSocket acceptedSocket;
+	int ret;
+
 	click_chatter("Migration function thread has been called\n");
+
+	/* accept connection from controller */
+	click_chatter("Listen to incoming connections\n");
+	if (controlSocket.listen(BACKLOG) < 0) {
+		click_chatter("Error listening to incoming connections\n");
+		return NULL;
+	}
+
+	click_chatter("Accept incoming connections\n");
+	acceptedSocket = controlSocket.accept();
+	if (acceptedSocket.fd == 0)
+		return NULL;
+
+	/* wait to receive packets */
 	return NULL;
 }
 #endif
