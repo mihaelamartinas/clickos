@@ -28,6 +28,12 @@
 #include <click/router.hh>
 #include <click/tcpsocket.hh>
 
+#include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+using namespace std;
+
 CLICK_DECLS
 
 IPRewriter::IPRewriter()
@@ -57,13 +63,19 @@ IPRewriter::~IPRewriter()
 
 void IPRewriter :: print_migrate_header(Protocol::Header header)
 {
-	click_chatter("ip = %ui, index = %ui, destinationLength = %ui, destPort = %ui\n", header.migrate.ip, header.migrate.index,
+	char dst[32];
+	cout << "[T_MIGRATE] ";
+	cout << "ip =  " << inet_ntop(AF_INET, (const void *)header.migrate.ip, dst, sizeof(dst)) << " ";
+	click_chatter("index = %u, destinationLength = %u, destPort = %u\n", header.migrate.index,
 			header.migrate.destinationLength, header.migrate.destinationPort);
 }
 
 void IPRewriter :: print_accept_migrate_header(Protocol::Header header)
 {
-	click_chatter("ip = %ui, subnetCount = %ui, destinationLength = %ui, destPort = %ui\n", header.acceptMigration.ip, header.acceptMigration.subnetCount);
+	char dst[32];
+	cout << "[T_ACCEPT_MIGRATION] ";
+	cout << "ip = " << inet_ntop(AF_INET, (const void *)header.acceptMigration.ip, dst, sizeof(dst)) << " ";
+	click_chatter("subnetCount = %u\n", header.acceptMigration.subnetCount);
 }
 
 void *
@@ -71,10 +83,10 @@ IPRewriter::migration_run(void *migration_data)
 {
 	TCPSocket controlSocket(CTRL_PORT);
 	TCPSocket acceptedSocket;
-	Protocol::Header header;
-	bool exit = false;
+	Protocol::Header header, headerACK;
 	ssize_t size;
 	char *destination;
+	char dst[32];
 
 	click_chatter("Migration function thread has been called\n");
 
@@ -93,30 +105,27 @@ IPRewriter::migration_run(void *migration_data)
 	/* wait to receive packets */
 	click_chatter("Receive packet from controller\n");
 
-	while (!exit) {
+	while (true) {
 		/* read header type */
 		size = acceptedSocket.recvNarrowed(&header, sizeof(Protocol::Header));
 		if (size < 0) {
-			exit = true;
-			click_chatter("Read invalid value\n");
+			goto bad_message;
 			continue;
 		}
 		switch (header.type) {
 			case Protocol::Header::T_MIGRATE:
-				click_chatter("T_MIGRATE\n");
-				print_migrate_header(header);
-
 				/* receive destination hostname */
 				destination = new char[header.migrate.destinationLength];
-				size = acceptedSocket.recvNarrowed(destination, header.migrate.destinationLength + 1);
-				if (size < 0) {
-					exit = true;
-				}
+				if (acceptedSocket.recvNarrowed(destination, header.migrate.destinationLength + 1) < 0)
+					goto bad_message;
 
-				click_chatter("Destination address is %s\n", destination);
+				headerACK.type = Protocol::Header::T_ACK;
+				acceptedSocket.send(&headerACK, sizeof(Protocol::Header));
+
+				cout << "Destination address " << inet_ntop(AF_INET, (const void *)destination, dst, sizeof(dst)) << endl;
+				print_migrate_header(header);
 				break;
 			case Protocol::Header::T_ACCEPT_MIGRATION:
-				click_chatter("T_ACCEPT_MIGRATION\n");
 				print_accept_migrate_header(header);
 				break;
 			case Protocol::Header::T_ACK:
@@ -127,11 +136,15 @@ IPRewriter::migration_run(void *migration_data)
 				break;
 			default: {
 				click_chatter("Error: unknown header\n");
-				exit = true;
+				goto bad_message;
 			}
 		}
 	}
 
+	return NULL;
+
+bad_message:
+	click_chatter("Received bad message\n");
 	return NULL;
 }
 #endif
