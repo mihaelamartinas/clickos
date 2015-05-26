@@ -14,7 +14,11 @@ int MigrationSender :: connectToMachine()
 	socket = new TCPSocket(TCPSocket :: ANY_PORT);
 
 	/* connect to the remote machine */
-	return socket.connect(port, hostname);
+	return socket->connect(port, hostname);
+}
+
+void MigrationSender :: run()
+{
 }
 
 

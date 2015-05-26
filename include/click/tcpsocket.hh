@@ -19,6 +19,7 @@ public:
 	int connect(uint16_t port, char *server_ip);
 	int listen(int backlog = 5);
 	TCPSocket accept();
+	int close();
 
 	ssize_t send(void *buf, size_t len);
 	ssize_t recv(void *buf, size_t len);

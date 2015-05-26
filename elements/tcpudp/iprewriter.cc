@@ -104,6 +104,8 @@ IPRewriter::migration_run(void *migration_data)
 	TCPSocket controlSocket(CTRL_PORT);
 	TCPSocket acceptedSocket;
 	Protocol::Header header, headerACK;
+	MigrationSender *sender;
+	MigrationReceiver *receiver;
 	ssize_t size;
 	char *destination;
 
@@ -145,14 +147,16 @@ IPRewriter::migration_run(void *migration_data)
 				acceptedSocket.send(&headerACK, sizeof(Protocol::Header));
 
 				print_migrate_header(header);
-				/* connect to remote machine */
-				MigrationSender sender(header.migrate.destinationPort, destination);
-				sender.connectToMachine();
 
+				/* connect to remote machine */
+				sender = new MigrationSender(header.migrate.destinationPort, destination);
+				sender->connectToMachine();
 				break;
+
 			case Protocol::Header::T_ACCEPT_MIGRATION:
 				print_accept_migrate_header(header);
-				MigrationReceiver receiver(MIG_PORT, NULL);
+				receiver = new MigrationReceiver (MIG_PORT, NULL);
+				receiver->connectToMachine();
 				break;
 			case Protocol::Header::T_ACK:
 				click_chatter("T_ACK\n");

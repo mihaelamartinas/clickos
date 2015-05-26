@@ -6,10 +6,13 @@ CLICK_DECLS
 
 class MigrationReceiver : public MigrationActions {
 	public:
-		MigrationReceiver(uint16_t remotePort, uint16_t listenPort, char *hostname) :
-			MigrationActions(remotePort, listenPort,  hostname) {};
+		MigrationReceiver() : MigrationActions() {};
+		MigrationReceiver(uint16_t port, char *hostname) :
+			MigrationActions(port, hostname) {};
+		void run();
+		int connectToMachine();
 
-}
+};
 
 CLICK_ENDDECLS
 #endif /* CLICK_MIGRATION_SENDER_HH */

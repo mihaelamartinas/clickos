@@ -80,6 +80,15 @@ int TCPSocket :: listen(int backlog)
 	return ret;
 }
 
+int TCPSocket :: close()
+{
+	int ret;
+
+	if ((ret = ::close(fd)) < 0)
+		return ret;
+
+	return 0;
+}
 
 ssize_t TCPSocket :: send(void *buf, size_t len)
 {
