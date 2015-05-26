@@ -11,12 +11,13 @@ public:
 
 	TCPSocket() { };
 	TCPSocket(uint16_t port);
+	static const uint16_t ANY_PORT = 0;
 
 #ifdef CLICK_USERLEVEL
 	TCPSocket(int fd) :
 		fd(fd), tx(0), rx(0) {}
 	int connect(uint16_t port, char *server_ip);
-	int listen(int backlog);
+	int listen(int backlog = 5);
 	TCPSocket accept();
 
 	ssize_t send(void *buf, size_t len);

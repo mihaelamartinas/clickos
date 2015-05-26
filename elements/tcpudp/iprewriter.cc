@@ -27,6 +27,8 @@
 #include <click/timer.hh>
 #include <click/router.hh>
 #include <click/tcpsocket.hh>
+#include <click/migrationsender.hh>
+#include <click/migrationreceiver.hh>
 
 #include <iostream>
 #include <sys/socket.h>
@@ -142,9 +144,15 @@ IPRewriter::migration_run(void *migration_data)
 				headerACK.type = Protocol::Header::T_ACK;
 				acceptedSocket.send(&headerACK, sizeof(Protocol::Header));
 
+				print_migrate_header(header);
+				/* connect to remote machine */
+				MigrationSender sender(header.migrate.destinationPort, destination);
+				sender.connectToMachine();
+
 				break;
 			case Protocol::Header::T_ACCEPT_MIGRATION:
 				print_accept_migrate_header(header);
+				MigrationReceiver receiver(MIG_PORT, NULL);
 				break;
 			case Protocol::Header::T_ACK:
 				click_chatter("T_ACK\n");
