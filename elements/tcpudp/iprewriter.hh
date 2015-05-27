@@ -226,6 +226,16 @@ class IPRewriter : public TCPRewriter { public:
 
     typedef UDPRewriter::UDPFlow UDPFlow;
 
+	typedef struct {
+		SimpleSpinlock *tcp_map_lock;
+		SimpleSpinlock *udp_map_lock;
+		SimpleSpinlock *heap_lock;
+
+		Map *tcp_map;
+		Map *udp_map;
+		IPRewriterHeap *heap;
+	} ThreadInfoData;
+
     IPRewriter() CLICK_COLD;
     ~IPRewriter() CLICK_COLD;
 
@@ -298,8 +308,8 @@ out:
     }
     static String udp_mappings_handler(Element *e, void *user_data);
 	static void * migration_run(void *migration_data);
-	static void print_migrate_header(Protocol::Header header);
-	static void print_accept_migrate_header(Protocol::Header header);
+	static void print_migrate_header(Protocol::ControllerHeader header);
+	static void print_accept_migrate_header(Protocol::ControllerHeader header);
 };
 
 

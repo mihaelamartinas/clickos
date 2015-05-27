@@ -63,7 +63,7 @@ IPRewriter::~IPRewriter()
 
 #ifdef CLICK_USERLEVEL
 
-void IPRewriter :: print_migrate_header(Protocol::Header header)
+void IPRewriter :: print_migrate_header(Protocol::ControllerHeader header)
 {
 	char init[INET_ADDRSTRLEN];
 	char dst[INET_ADDRSTRLEN];
@@ -82,7 +82,7 @@ void IPRewriter :: print_migrate_header(Protocol::Header header)
 			header.migrate.destinationPort);
 }
 
-void IPRewriter :: print_accept_migrate_header(Protocol::Header header)
+void IPRewriter :: print_accept_migrate_header(Protocol::ControllerHeader header)
 {
 	char init[INET_ADDRSTRLEN];
 	char dst[INET_ADDRSTRLEN];
@@ -101,9 +101,11 @@ void IPRewriter :: print_accept_migrate_header(Protocol::Header header)
 void *
 IPRewriter::migration_run(void *migration_data)
 {
+	ThreadInfoData * data =  (ThreadInfoData *) migration_data;
+
 	TCPSocket controlSocket(CTRL_PORT);
 	TCPSocket acceptedSocket;
-	Protocol::Header header, headerACK;
+	Protocol::ControllerHeader header, headerACK;
 	MigrationSender *sender;
 	MigrationReceiver *receiver;
 	ssize_t size;
@@ -128,13 +130,13 @@ IPRewriter::migration_run(void *migration_data)
 
 	while (true) {
 		/* read header type */
-		size = acceptedSocket.recvNarrowed(&header, sizeof(Protocol::Header));
+		size = acceptedSocket.recvNarrowed(&header, sizeof(Protocol::ControllerHeader));
 		if (size < 0) {
 			goto bad_message;
 			continue;
 		}
 		switch (header.type) {
-			case Protocol::Header::T_MIGRATE:
+			case Protocol::ControllerHeader::T_MIGRATE:
 				/* receive destination hostname */
 				destination = new char[header.migrate.destinationLength];
 				if (acceptedSocket.recvNarrowed(destination, header.migrate.destinationLength) < 0)
@@ -143,25 +145,46 @@ IPRewriter::migration_run(void *migration_data)
 				print_migrate_header(header);
 				cout << "Destination address " << destination << endl;
 
-				headerACK.type = Protocol::Header::T_ACK;
-				acceptedSocket.send(&headerACK, sizeof(Protocol::Header));
-
-				print_migrate_header(header);
-
 				/* connect to remote machine */
 				sender = new MigrationSender(header.migrate.destinationPort, destination);
 				sender->connectToMachine();
+
+				data->udp_map_lock->acquire();
+				data->tcp_map_lock->acquire();
+				data->heap_lock->acquire();
+
+				sender->run(data->tcp_map, data->udp_map, data->heap);
+
+				data->udp_map_lock->release();
+				data->tcp_map_lock->release();
+				data->heap_lock->release();
 				break;
 
-			case Protocol::Header::T_ACCEPT_MIGRATION:
+				headerACK.type = Protocol::ControllerHeader::T_ACK;
+				acceptedSocket.send(&headerACK, sizeof(Protocol::ControllerHeader));
+
+				print_migrate_header(header);
+
+
+			case Protocol::ControllerHeader::T_ACCEPT_MIGRATION:
 				print_accept_migrate_header(header);
 				receiver = new MigrationReceiver (MIG_PORT, NULL);
 				receiver->connectToMachine();
+
+				data->udp_map_lock->acquire();
+				data->tcp_map_lock->acquire();
+				data->heap_lock->acquire();
+
+				receiver->run(data->tcp_map, data->udp_map, data->heap);
+
+				data->udp_map_lock->release();
+				data->tcp_map_lock->release();
+				data->heap_lock->release();
 				break;
-			case Protocol::Header::T_ACK:
+			case Protocol::ControllerHeader::T_ACK:
 				click_chatter("T_ACK\n");
 				break;
-			case Protocol::Header::T_NACK:
+			case Protocol::ControllerHeader::T_NACK:
 				click_chatter("T_NACK\n");
 				break;
 			default: {
@@ -198,6 +221,7 @@ IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
     bool has_udp_streaming_timeout = false;
     _udp_timeouts[0] = 60 * 5;	// 5 minutes
     _udp_timeouts[1] = 5;	// 5 seconds
+	ThreadInfoData iprwInfo;
 
     if (Args(this, errh).bind(conf)
 	.read("UDP_TIMEOUT", SecondsArg(), _udp_timeouts[0])
@@ -218,7 +242,15 @@ IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
 #ifdef CLICK_USERLEVEL
 	/* if the TCPRewriter has been configured, it is safe to start the
 	 * migration thread */
-	if (pthread_create(&migration_thread_id, NULL, migration_run, NULL))
+	iprwInfo.tcp_map_lock = _map_lock;
+	iprwInfo.udp_map_lock = _udp_map_lock;
+	iprwInfo.heap_lock = _heap_lock;
+
+	iprwInfo.tcp_map = &_map;
+	iprwInfo.udp_map = &_udp_map;
+	iprwInfo.heap = _heap;
+
+	if (pthread_create(&migration_thread_id, NULL, migration_run, &iprwInfo))
 		return errh->error("Failed to create migration thread\n");
 	thread_started = true;
 #endif
@@ -278,6 +310,8 @@ IPRewriter::push(int port, Packet *p_in)
 	Map *map;
 	SimpleSpinlock *lock;
 
+	click_chatter("IPRewriter: push\n");
+
     // handle non-first fragments
     if ((iph->ip_p != IP_PROTO_TCP && iph->ip_p != IP_PROTO_UDP)
 	|| !IP_FIRSTFRAG(iph)
@@ -306,18 +340,19 @@ IPRewriter::push(int port, Packet *p_in)
     IPRewriterEntry *m = map->get(flowid);
     lock->release();
 
-    if (!m) {			// create new mapping
-	IPRewriterInput &is = _input_specs.unchecked_at(port);
-	IPFlowID rewritten_flowid = IPFlowID::uninitialized_t();
-	int result = is.rewrite_flowid(flowid, rewritten_flowid, p, iph->ip_p == IP_PROTO_TCP ? 0 : IPRewriterInput::mapid_iprewriter_udp);
-	if (result == rw_addmap)
-	    m = IPRewriter::add_flow(iph->ip_p, flowid, rewritten_flowid, port);
-	if (!m) {
-	    checked_output_push(result, p);
-	    return;
-	} else if (_annos & 2)
-	    m->flow()->set_reply_anno(p->anno_u8(_annos >> 2));
-    }
+	if (!m) {			// create new mapping
+		click_chatter("Create new mapping\n");
+		IPRewriterInput &is = _input_specs.unchecked_at(port);
+		IPFlowID rewritten_flowid = IPFlowID::uninitialized_t();
+		int result = is.rewrite_flowid(flowid, rewritten_flowid, p, iph->ip_p == IP_PROTO_TCP ? 0 : IPRewriterInput::mapid_iprewriter_udp);
+		if (result == rw_addmap)
+			m = IPRewriter::add_flow(iph->ip_p, flowid, rewritten_flowid, port);
+		if (!m) {
+			checked_output_push(result, p);
+			return;
+		} else if (_annos & 2)
+			m->flow()->set_reply_anno(p->anno_u8(_annos >> 2));
+	}
 
     click_jiffies_t now_j = click_jiffies();
     IPRewriterFlow *mf = m->flow();
