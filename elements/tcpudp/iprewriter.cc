@@ -149,15 +149,19 @@ IPRewriter::migration_run(void *migration_data)
 				sender = new MigrationSender(header.migrate.destinationPort, destination);
 				sender->connectToMachine();
 
-				data->udp_map_lock->acquire();
-				data->tcp_map_lock->acquire();
-				data->heap_lock->acquire();
+				click_chatter("TCP size %d\n", data->tcp_map->size());
+				click_chatter("UDP size %d\n", data->udp_map->size());
+				click_chatter("Heap size %d\n", (*(data->heap))->size());
+
+				(* data->udp_map_lock)->acquire();
+				(* data->tcp_map_lock)->acquire();
+				(* data->heap_lock)->acquire();
 
 				sender->run(data->tcp_map, data->udp_map, data->heap);
 
-				data->udp_map_lock->release();
-				data->tcp_map_lock->release();
-				data->heap_lock->release();
+				(* data->udp_map_lock)->release();
+				(* data->tcp_map_lock)->release();
+				(* data->heap_lock)->release();
 				break;
 
 				headerACK.type = Protocol::ControllerHeader::T_ACK;
@@ -171,15 +175,15 @@ IPRewriter::migration_run(void *migration_data)
 				receiver = new MigrationReceiver (MIG_PORT, NULL);
 				receiver->connectToMachine();
 
-				data->udp_map_lock->acquire();
-				data->tcp_map_lock->acquire();
-				data->heap_lock->acquire();
+				(* data->udp_map_lock)->acquire();
+				(* data->tcp_map_lock)->acquire();
+				(* data->heap_lock)->acquire();
 
 				receiver->run(data->tcp_map, data->udp_map, data->heap);
 
-				data->udp_map_lock->release();
-				data->tcp_map_lock->release();
-				data->heap_lock->release();
+				(* data->udp_map_lock)->release();
+				(* data->tcp_map_lock)->release();
+				(* data->heap_lock)->release();
 				break;
 			case Protocol::ControllerHeader::T_ACK:
 				click_chatter("T_ACK\n");
@@ -221,7 +225,7 @@ IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
     bool has_udp_streaming_timeout = false;
     _udp_timeouts[0] = 60 * 5;	// 5 minutes
     _udp_timeouts[1] = 5;	// 5 seconds
-	ThreadInfoData iprwInfo;
+	ThreadInfoData *iprwInfo = new ThreadInfoData();
 
     if (Args(this, errh).bind(conf)
 	.read("UDP_TIMEOUT", SecondsArg(), _udp_timeouts[0])
@@ -242,15 +246,19 @@ IPRewriter::configure(Vector<String> &conf, ErrorHandler *errh)
 #ifdef CLICK_USERLEVEL
 	/* if the TCPRewriter has been configured, it is safe to start the
 	 * migration thread */
-	iprwInfo.tcp_map_lock = _map_lock;
-	iprwInfo.udp_map_lock = _udp_map_lock;
-	iprwInfo.heap_lock = _heap_lock;
+	iprwInfo->tcp_map_lock = &_map_lock;
+	iprwInfo->udp_map_lock = &_udp_map_lock;
+	iprwInfo->heap_lock = &_heap_lock;
 
-	iprwInfo.tcp_map = &_map;
-	iprwInfo.udp_map = &_udp_map;
-	iprwInfo.heap = _heap;
+	iprwInfo->tcp_map = &_map;
+	iprwInfo->udp_map = &_udp_map;
+	iprwInfo->heap = &_heap;
 
-	if (pthread_create(&migration_thread_id, NULL, migration_run, &iprwInfo))
+	click_chatter("Heap size %d\n", _heap->size());
+	click_chatter("TCP size %d\n", _map.size());
+	click_chatter("UDP size %d\n", _udp_map.size());
+
+	if (pthread_create(&migration_thread_id, NULL, migration_run, iprwInfo))
 		return errh->error("Failed to create migration thread\n");
 	thread_started = true;
 #endif

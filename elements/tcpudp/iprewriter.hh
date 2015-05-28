@@ -227,13 +227,13 @@ class IPRewriter : public TCPRewriter { public:
     typedef UDPRewriter::UDPFlow UDPFlow;
 
 	typedef struct {
-		SimpleSpinlock *tcp_map_lock;
-		SimpleSpinlock *udp_map_lock;
-		SimpleSpinlock *heap_lock;
+		SimpleSpinlock **tcp_map_lock;
+		SimpleSpinlock **udp_map_lock;
+		SimpleSpinlock **heap_lock;
 
 		Map *tcp_map;
 		Map *udp_map;
-		IPRewriterHeap *heap;
+		IPRewriterHeap **heap;
 	} ThreadInfoData;
 
     IPRewriter() CLICK_COLD;

@@ -102,7 +102,7 @@ namespace Protocol {
 			FlowPair flows[0];
 			MigrationInfo migrationInfo;
 		};
-	};
+	}__attribute__((__packed__));
 }
 CLICK_ENDDECLS
 #endif /* CGN_CONTROLLER_PROTOCOL */

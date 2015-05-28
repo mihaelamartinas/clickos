@@ -9,7 +9,7 @@ class MigrationReceiver : public MigrationActions {
 		MigrationReceiver() : MigrationActions() {};
 		MigrationReceiver(uint16_t port, char *hostname) :
 			MigrationActions(port, hostname) {};
-		void run(Map *tcp_map, Map *udp_map, IPRewriterHeap *heap);
+		void run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap);
 		int connectToMachine();
 
 };

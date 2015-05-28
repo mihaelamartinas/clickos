@@ -35,13 +35,13 @@ out:
 	return ret;
 }
 
-void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap *heap)
+void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 {
 	ssize_t recv_size;
 	Protocol::MigrationHeader header;
 	
 	while(true) {
-		recv_size = socket->recv(&header, sizeof(Protocol::MigrationHeader));
+		recv_size = socket->recv(&header, sizeof(Protocol::MigrationHeader::MigrationType) + sizeof(Protocol::MigrationInfo));
 		if (recv < 0) {
 			click_chatter("Error reading message header\n");
 			goto out;
@@ -49,18 +49,18 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap *heap)
 
 		switch(header.type) {
 			case Protocol::MigrationHeader::T_INFO:
-										   print_info_header(header);
-										   goto out;
-										   break;
+				print_info_header(header);
+				goto out;
+				break;
 			case Protocol::MigrationHeader::T_MAP_TCP:
-										   break;
+				break;
 			case Protocol::MigrationHeader::T_MAP_UDP:
-										   break;
+				break;
 			case Protocol::MigrationHeader::T_HEAP_GUARANTEED:
-										   break;
+				break;
 			case Protocol::MigrationHeader::T_HEAP_BEST_EFFORT:
-										   goto out;
-										   break;
+				goto out;
+				break;
 		}
 	}
 out:
