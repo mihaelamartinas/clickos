@@ -2,6 +2,8 @@
 #define CLICK_MIGRATION_RECEIVER_HH
 
 #include <click/migrationactions.hh>
+#include <click/migrationreceiver.hh>
+
 CLICK_DECLS
 
 class MigrationReceiver : public MigrationActions {
@@ -11,6 +13,10 @@ class MigrationReceiver : public MigrationActions {
 			MigrationActions(port, hostname) {};
 		void run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap);
 		int connectToMachine();
+
+	private:
+		void storeMap(Protocol::MigrationHeader::MigrationType type, size_t no_maps);
+		void storeHeap(Protocol::MigrationHeader::MigrationType type, size_t no_flows);
 
 };
 

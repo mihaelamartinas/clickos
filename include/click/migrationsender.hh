@@ -2,6 +2,8 @@
 #define CLICK_MIGRATION_SENDER_HH
 
 #include <click/migrationactions.hh>
+#include <click/protocol.hh>
+
 CLICK_DECLS
 
 class MigrationSender : public MigrationActions {
@@ -11,6 +13,11 @@ class MigrationSender : public MigrationActions {
 			MigrationActions(port, hostname) {};
 		void run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap);
 		int connectToMachine();
+
+	private:
+		void copyFlow(IPFlowID src, Protocol::FlowEntry *dst);
+		Protocol::MapEntry* unfoldMap(Map *flowMap, size_t *no_flows);
+		Protocol::FlowPair* unfoldHeap(IPRewriterHeap **heap);
 };
 
 CLICK_ENDDECLS

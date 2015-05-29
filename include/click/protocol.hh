@@ -88,6 +88,12 @@ namespace Protocol {
 		FlowEntry rewrittenFlow;
 	};
 
+	struct MapEntry {
+		size_t bucket_id;
+		size_t bucket_size;
+		FlowEntry flows[0];
+	};
+
 	struct MigrationHeader {
 		enum MigrationType {
 			T_INFO,
@@ -100,6 +106,7 @@ namespace Protocol {
 		MigrationType type;
 		union {
 			FlowPair flows[0];
+			MapEntry entries[0];
 			MigrationInfo migrationInfo;
 		};
 	}__attribute__((__packed__));
