@@ -97,7 +97,7 @@ namespace Protocol {
 	struct MapEntry {
 		size_t bucket_id;
 		size_t bucket_size;
-		FlowID flows[0];
+		FlowInfo flows[0];
 	};
 
 	struct MigrationHeader {

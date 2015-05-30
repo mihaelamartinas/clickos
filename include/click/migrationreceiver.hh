@@ -16,8 +16,8 @@ class MigrationReceiver : public MigrationActions {
 
 	private:
 		void initMigrationInfo(Protocol::MigrationInfo *migrationInfo);
-		void storeMap(Protocol::MigrationHeader::MigrationType type, size_t no_maps);
-		void storeHeap(Protocol::MigrationHeader::MigrationType type, size_t no_flows);
+		void storeMap(Map *map, Protocol::MigrationHeader::MigrationType type, size_t no_maps);
+		void storeHeap(IPRewriterHeap **heap, Protocol::MigrationHeader::MigrationType type, size_t no_flows);
 
 };
 

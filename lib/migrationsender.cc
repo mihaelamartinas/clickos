@@ -48,12 +48,14 @@ Protocol::MapEntry* MigrationSender :: unfoldMap(Map *flowMap, size_t *no_flows)
 		entries[no_entries].bucket_size = bucket_size;
 		*no_flows += bucket_size;
 
-		Protocol::FlowID *flows = new Protocol::FlowID[bucket_size];
+		Protocol::FlowInfo *flows = new Protocol::FlowInfo[bucket_size];
 
 		for (counter = 0; it != flowMap->end(); it++, counter++) {
-			copyFlow(it.get()->flowid(), &flows[counter]);
+			flows[counter].direction = it.get()->direction();
+			flows[counter].output = it.get()->output();
+			copyFlow(it.get()->flowid(), &flows[counter].flowId);
 		}
-		memcpy(entries[no_entries].flows, flows, sizeof(Protocol::FlowID) * bucket_size);
+		memcpy(entries[no_entries].flows, flows, sizeof(Protocol::FlowInfo) * bucket_size);
 
 		no_entries++;
 	}

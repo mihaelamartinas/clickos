@@ -36,10 +36,14 @@ out:
 }
 
 void
-MigrationReceiver :: storeMap(Protocol::MigrationHeader::MigrationType type, size_t no_maps)
+MigrationReceiver :: storeMap(Map *map, Protocol::MigrationHeader::MigrationType type,
+							size_t no_maps)
 {
-	size_t i, packet_size;
+	size_t i, j, packet_size;
 	Protocol::MapEntry entry;
+	HashContainer<IPRewriterEntry>::iterator it;
+	IPRewriterEntry *ipRwEntry;
+	IPFlowID *flowid;
 
 	/* receive all the mappings one by one */
 	for (i = 0; i < no_maps; i++) {
@@ -51,21 +55,34 @@ MigrationReceiver :: storeMap(Protocol::MigrationHeader::MigrationType type, siz
 		click_chatter("bucket_id = %d, bucket_size = %d\n", entry.bucket_id, entry.bucket_size);
 
 		/* receive bucket content */
-		struct Protocol::FlowID bucket_flows[entry.bucket_size];
-		packet_size = entry.bucket_size * sizeof(Protocol::FlowID);
+		struct Protocol::FlowInfo bucket_flows[entry.bucket_size];
+		packet_size = entry.bucket_size * sizeof(Protocol::FlowInfo);
 		if (socket->recvNarrowed(bucket_flows, packet_size) < 0) {
-			click_chatter("Error receiving flows in bucket %d\n", entry.bucket_id);
+			click_chatter("Error receiving flows in bucket %d\n",
+					entry.bucket_id);
 			return;
+		}
+
+		/* find position for each flow and add it to the map */
+		for (j = 0; j < entry.bucket_size; j++) {
+			ipRwEntry = new IPRewriterEntry();
+			flowid = new IPFlowID(bucket_flows[j].flowId.s_addr,
+					bucket_flows[j].flowId.d_addr,
+					bucket_flows[j].flowId.s_port,
+					bucket_flows[j].flowId.d_port);
+			ipRwEntry->initialize(*flowid, bucket_flows[j].output, bucket_flows[j].direction);
+			it = map->find(*flowid);
+			map->insert_at(it, ipRwEntry);
 		}
 	}
 }
 
 void
-MigrationReceiver :: storeHeap(Protocol::MigrationHeader::MigrationType type, size_t no_flows)
+MigrationReceiver :: storeHeap(IPRewriterHeap **heap, Protocol::MigrationHeader::MigrationType type, size_t no_flows)
 {
-	size_t packet_size;
+	size_t i, packet_size;
+	IPRewriterFlow *ipRwFlow;
 	struct Protocol::HeapEntry *entries = new Protocol::HeapEntry[no_flows];
-
 	int heap_type = (type == Protocol::MigrationHeader::T_HEAP_GUARANTEED)?
 				IPRewriterHeap::h_guarantee : IPRewriterHeap::h_best_effort;
 
@@ -74,6 +91,16 @@ MigrationReceiver :: storeHeap(Protocol::MigrationHeader::MigrationType type, si
 		click_chatter("Error receiving heap information\n");
 		return;
 	}
+
+	/** TODO - add to heap
+	Vector<IPRewriterFlow *> &myheap = heap->_heaps[heap_type];
+	for (i = 0; i < no_flows; i++) {
+		ipRwFlow = 
+		myheap.push_back(flow);
+		push_heap(myheap.begin(), myheap.end(),
+				IPRewriterFlow::heap_less(), IPRewriterFlow::heap_place());
+	}
+	*/
 }
 
 void MigrationReceiver :: initMigrationInfo(Protocol::MigrationInfo *migrationInfo)
@@ -118,7 +145,7 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 					click_chatter("ERROR: the information header wasn't received\n");
 					goto out;
 				}
-				storeMap(Protocol::MigrationHeader::T_MAP_TCP,
+				storeMap(tcp_map, Protocol::MigrationHeader::T_MAP_TCP,
 						migrationInfo.no_mappings_tcp);
 				break;
 			case Protocol::MigrationHeader::T_MAP_UDP:
@@ -126,7 +153,7 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 					click_chatter("ERROR: the information header wasn't received\n");
 					goto out;
 				}
-				storeMap(Protocol::MigrationHeader::T_MAP_UDP,
+				storeMap(udp_map, Protocol::MigrationHeader::T_MAP_UDP,
 						migrationInfo.no_mappings_udp);
 				break;
 			case Protocol::MigrationHeader::T_HEAP_GUARANTEED:
@@ -134,7 +161,7 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 					click_chatter("ERROR: the information header wasn't received\n");
 					goto out;
 				}
-				storeHeap(Protocol::MigrationHeader::T_HEAP_GUARANTEED,
+				storeHeap(heap, Protocol::MigrationHeader::T_HEAP_GUARANTEED,
 						migrationInfo.no_heap_guranteed);
 				break;
 			case Protocol::MigrationHeader::T_HEAP_BEST_EFFORT:
@@ -142,7 +169,7 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 					click_chatter("ERROR: the information header wasn't received\n");
 					goto out;
 				}
-				storeHeap(Protocol::MigrationHeader::T_HEAP_BEST_EFFORT,
+				storeHeap(heap, Protocol::MigrationHeader::T_HEAP_BEST_EFFORT,
 						migrationInfo.no_heap_best_effort);
 				goto out;
 				break;
