@@ -93,6 +93,29 @@ Protocol::HeapEntry* MigrationSender::unfoldHeap(IPRewriterHeap **heap, int heap
 	return heap_pairs;
 }
 
+int MigrationSender::sendMigrationInfo(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
+{
+	size_t packet_size;
+	Protocol::MigrationHeader header;
+
+	header.type = Protocol::MigrationHeader::T_INFO;
+	header.migrationInfo.no_mappings_tcp = tcp_map->size();
+	header.migrationInfo.no_mappings_udp = udp_map->size();
+	header.migrationInfo.no_heap_best_effort = (*heap)->_heaps[IPRewriterHeap :: h_best_effort].size();
+	header.migrationInfo.no_heap_guranteed = (*heap)->_heaps[IPRewriterHeap :: h_guarantee].size();
+
+	print_info_header(header);
+
+	packet_size = sizeof(Protocol::MigrationHeader::MigrationType) +
+				sizeof(Protocol::MigrationInfo);
+	if (socket->send(&header, packet_size) < 0) {
+		click_chatter("Error sending information header\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 int MigrationSender::sendMapping(Map *map, Protocol::MigrationHeader::MigrationType map_type)
 {
 	size_t no_flows, packet_size;
@@ -142,28 +165,7 @@ int MigrationSender::sendHeap(IPRewriterHeap **heap, Protocol::MigrationHeader::
 
 	return 0;
 }
-int MigrationSender::sendMigrationInfo(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
-{
-	size_t packet_size;
-	Protocol::MigrationHeader header;
 
-	header.type = Protocol::MigrationHeader::T_INFO;
-	header.migrationInfo.no_mappings_tcp = tcp_map->size();
-	header.migrationInfo.no_mappings_udp = udp_map->size();
-	header.migrationInfo.no_heap_best_effort = (*heap)->_heaps[IPRewriterHeap :: h_best_effort].size();
-	header.migrationInfo.no_heap_guranteed = (*heap)->_heaps[IPRewriterHeap :: h_guarantee].size();
-
-	print_info_header(header);
-
-	packet_size = sizeof(Protocol::MigrationHeader::MigrationType) +
-				sizeof(Protocol::MigrationInfo);
-	if (socket->send(&header, packet_size) < 0) {
-		click_chatter("Error sending information header\n");
-		return -1;
-	}
-
-	return 0;
-}
 
 void MigrationSender :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 {
