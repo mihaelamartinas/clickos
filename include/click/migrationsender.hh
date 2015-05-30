@@ -15,9 +15,15 @@ class MigrationSender : public MigrationActions {
 		int connectToMachine();
 
 	private:
-		void copyFlow(IPFlowID src, Protocol::FlowEntry *dst);
+		void copyFlow(IPFlowID src, Protocol::FlowID *dst);
+
+		int sendMigrationInfo(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap);
+
 		Protocol::MapEntry* unfoldMap(Map *flowMap, size_t *no_flows);
-		Protocol::FlowPair* unfoldHeap(IPRewriterHeap **heap);
+		int sendMapping(Map *map, Protocol::MigrationHeader::MigrationType map_type);
+
+		Protocol::HeapEntry* unfoldHeap(IPRewriterHeap **heap, int heap_type);
+		int sendHeap(IPRewriterHeap **heap, Protocol::MigrationHeader::MigrationType header_type);
 };
 
 CLICK_ENDDECLS

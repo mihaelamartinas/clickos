@@ -38,7 +38,7 @@ out:
 void
 MigrationReceiver :: storeMap(Protocol::MigrationHeader::MigrationType type, size_t no_maps)
 {
-	size_t i, value_id, recv_size;
+	size_t i;
 	Protocol::MapEntry entry;
 
 	/* receive all the mappings one by one */
@@ -51,8 +51,8 @@ MigrationReceiver :: storeMap(Protocol::MigrationHeader::MigrationType type, siz
 		click_chatter("bucket_id = %d, bucket_size = %d\n", entry.bucket_id, entry.bucket_size);
 
 		/* receive bucket content */
-		struct Protocol::FlowEntry bucket_flows[entry.bucket_size];
-		if (socket->recv(bucket_flows, entry.bucket_size * sizeof(Protocol::FlowEntry)) < 0) {
+		struct Protocol::FlowID bucket_flows[entry.bucket_size];
+		if (socket->recv(bucket_flows, entry.bucket_size * sizeof(Protocol::FlowID)) < 0) {
 			click_chatter("Error receiving flows in bucket %d\n", entry.bucket_id);
 			return;
 		}
@@ -71,8 +71,7 @@ void MigrationReceiver :: run(Map *tcp_map, Map *udp_map, IPRewriterHeap **heap)
 	Protocol::MigrationInfo migrationInfo;
 	
 	while(true) {
-		recv_size = socket->recv(&header, sizeof(Protocol::MigrationHeader));
-		if (recv < 0) {
+		if (socket->recvNarrowed(&header, sizeof(Protocol::MigrationHeader)) < 0) {
 			click_chatter("Error reading message header\n");
 			goto out;
 		}

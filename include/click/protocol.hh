@@ -76,22 +76,28 @@ namespace Protocol {
 		int no_heap_best_effort;
 	};
 
-	struct FlowEntry {
+	struct FlowID {
 		uint32_t s_addr;
 		uint16_t s_port;
 		uint32_t d_addr;
 		uint16_t d_port;
 	};
 
-	struct FlowPair {
-		FlowEntry originalFlow;
-		FlowEntry rewrittenFlow;
+	struct FlowInfo {
+		FlowID flowId;
+		bool direction;
+		int output;
+	};
+
+	struct HeapEntry {
+		FlowInfo flows[2];
+		uint64_t expiry;
 	};
 
 	struct MapEntry {
 		size_t bucket_id;
 		size_t bucket_size;
-		FlowEntry flows[0];
+		FlowID flows[0];
 	};
 
 	struct MigrationHeader {
@@ -105,8 +111,8 @@ namespace Protocol {
 
 		MigrationType type;
 		union {
-			FlowPair flows[0];
-			MapEntry entries[0];
+			MapEntry mapEntries[0];
+			HeapEntry heapEntries[0];
 			MigrationInfo migrationInfo;
 		};
 	}__attribute__((__packed__));

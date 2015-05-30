@@ -77,6 +77,7 @@ class IPRewriterHeap { public:
 
     friend class IPRewriterBase;
     friend class IPRewriterFlow;
+	friend class MigrationSender;
 
 };
 
